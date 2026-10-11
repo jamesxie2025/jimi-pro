@@ -5,7 +5,8 @@ on:
     branches:
       - main
     paths:
-      - 'win/Dockerfile*'
+      - 'win/Dockerfile'
+      - 'win/Dockerfile.base'
       - 'win/entrypoint.sh'
       - 'win/skills/**'
       - '.github/workflows/build-win-image.yml'
