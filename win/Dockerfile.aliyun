@@ -7,7 +7,7 @@
 # 3. 构建规则设置：
 #    - 分支：main
 #    - Dockerfile 路径：win/Dockerfile.aliyun
-#    - 镜像版本：2026.10.1 (或 win-2026.10.1)
+#    - 镜像版本：latest (自动跟随 GitHub 最新构建版本，永久无需手动修改版本号)
 # ==============================================================================
 
-FROM ghcr.io/jamesxie2025/jimi-pro:2026.10.1
+FROM ghcr.io/jamesxie2025/jimi-pro:latest
