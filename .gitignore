@@ -27,3 +27,14 @@ jimi-bridge/
 **/.DS_Store
 __pycache__/
 **/__pycache__/
+
+# 忽略根目录下的本机 macOS 专用构建与运行文件（GitHub 仓库仅用于 Windows 版）
+/Dockerfile
+/Dockerfile.base
+/Dockerfile.sandbox
+/docker-compose.yml
+/entrypoint.sh
+/release.sh
+/run.sh
+/.env.example
+/skills/
