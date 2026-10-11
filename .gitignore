@@ -39,3 +39,4 @@ __pycache__/
 /.env.example
 /skills/
 /deployment_guide.md
+win/README_WIN.md
