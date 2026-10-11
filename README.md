@@ -1,71 +1,82 @@
-# 吉米·智驱 (Jimi Agent Dual) 部署与构建指南
+# 吉米·智驱 (Jimi Agent Pro) 部署与构建指南
 
-本项目已适配为**构建阿里云镜像**与**本地拉取镜像验证**的双向支持架构。
-
----
-
-## 📂 项目文件架构说明
-
-项目中的文件已划分为以下两大职责清晰的“家系/一派”：
-
-### 1. 构建与发布派 (Release Files)
-这组文件负责将源码与环境打包并构建为支持多架构 (`linux/amd64`, `linux/arm64`) 的 Docker 镜像，并自动推送到阿里云私有镜像仓库。
-* **[Dockerfile](file:///Users/xwxie/Public/jimi-agent-dual/Dockerfile)**: 基于基础镜像安装高算力组件（DuckDB、Python 技能包、Playwright 浏览器、Torch 等）。
-* **[release.sh](file:///Users/xwxie/Public/jimi-agent-dual/release.sh)**: 自动化多架构 Docker 构建与推送脚本。
-* **[entrypoint.sh](file:///Users/xwxie/Public/jimi-agent-dual/entrypoint.sh)**: 容器启动入口，内置商业授权校验和 `openclaw.json` 自动播种/基因修复逻辑。
-* **[license.sh](file:///Users/xwxie/Public/jimi-agent-dual/license.sh)**: 离线授权激活码生成工具（供管理员为客户电脑生成 LICENSE_KEY）。
-
-### 2. 本地拉取与运行派 (Local Verification & Run Files)
-这组文件用于在本机（或客户部署机）直接拉取阿里云镜像并运行验证，确保容器开箱即用。
-* **[docker-compose.yml](file:///Users/xwxie/Public/jimi-agent-dual/docker-compose.yml)**: 定义了服务容器配置，默认从阿里云拉取最新的 `jimi-agent:latest` 镜像。
-* **[run.sh](file:///Users/xwxie/Public/jimi-agent-dual/run.sh)**: 本地一键验证脚本。会自动检查/生成 `.env`，执行镜像 pull 并后台启动服务。
-* **[.env.example](file:///Users/xwxie/Public/jimi-agent-dual/.env.example)**: 本地配置环境变量模板。
+本项目为 **吉米·智驱 (Jimi Agent Pro - OpenClaw `2026.10.1` 商业增强版)** 的官方构建与部署仓库，采用**平台架构物理隔离**设计，分别为 **Windows (`linux/amd64`)** 与 **macOS Apple Silicon (`linux/arm64`)** 提供原生独立镜像与一键启动脚本。
 
 ---
 
-## 🚀 阿里云多架构镜像构建与发布
+## 📦 官方预构建镜像（Windows 版 · 免登录直接拉取）
 
-当需要重新打包并发布新镜像时，直接执行：
-```bash
-./release.sh
-```
+Windows (`linux/amd64`) 镜像由 GitHub Actions 自动编译并发布至 GitHub Container Registry (`ghcr.io`)，全球用户可直接免登录拉取：
 
-> **💡 避坑与网络优化设计：**
-> * **默认构建器：** 脚本自动使用 Docker Desktop 默认构建器 (`desktop-linux` / `default`)，使用宿主机网络栈，避免 BuildKit 虚拟网关（`vpnkit`）在大量并发连接下崩溃。
-> * **阿里云 HTTPS 源：** 构建过程中 APT 安装和 Python pip 直连阿里云 HTTPS 镜像站，走代理直连规则，速度极快且极度稳定；针对国外依赖包（如 DuckDB、Playwright）则会通过宿主机代理进行下载，互不干扰。
+| 标签说明 | 镜像地址 (`docker pull`) |
+| :--- | :--- |
+| **当前稳定版（推荐）** | `ghcr.io/jamesxie2025/jimi-pro:2026.10.1` |
+| **最新版本** | `ghcr.io/jamesxie2025/jimi-pro:latest` |
+| **Windows 架构显式标签** | `ghcr.io/jamesxie2025/jimi-pro:2026.10.1-amd64` |
+| **Windows 算力底座镜像** | `ghcr.io/jamesxie2025/jimi-pro:base-env-amd64` |
 
 ---
 
-## 💻 本地验证与客户部署运行
+## 📂 仓库目录结构说明
 
-### 1. 快速启动（一键运行）
-在终端中执行以下命令即可启动本地验证：
-```bash
-./run.sh
-```
-* 如果是首次运行，脚本会自动从 `.env.example` 复制生成 `.env` 配置文件，并提示你填写 `DEEPSEEK_API_KEY`。
-* 填写好配置后重新运行 `./run.sh`，脚本将自动拉取阿里云镜像并以后台容器启动。
+仓库按操作系统与硬件架构分为两个独立部分：
 
-### 2. 手动启动
-如果不想使用脚本，可以直接使用标准的 Docker Compose 命令：
-```bash
-# 复制配置文件
-cp .env.example .env
-# (编辑 .env 填写必要的 API Key)
+### 1. Windows 专享版（[`win/`](./win) 目录 — `linux/amd64` 架构）
+专为 Windows 10/11 PC（WSL2 + Docker Desktop）打造，针对 Windows 跨系统文件挂载（virtiofs / NTFS / 9p）进行了深度兼容与防死锁优化：
+* **[`win/docker-compose.yml`](./win/docker-compose.yml)**：Windows 容器编排配置，默认拉取 `ghcr.io/jamesxie2025/jimi-pro:2026.10.1`。
+* **[`win/run.bat`](./win/run.bat) / [`win/run.ps1`](./win/run.ps1)**：Windows 一键启动与更新脚本（自动检查 `.env`、拉取最新镜像、后台启动并等待网关就绪）。
+* **[`win/.env.example`](./win/.env.example)**：Windows 环境变量与硬件内存配额配置模板。
+* **[`win/Dockerfile.base`](./win/Dockerfile.base)**：Windows 全量算力底座构建文件（内置 Debian 系统库、Python 科学计算/AI 依赖、CPU 版 PyTorch、LibreOffice、Playwright Chromium、预置插件种子等）。
+* **[`win/Dockerfile`](./win/Dockerfile)**：Windows 极速增量热升级构建文件（复用 `:base-env-amd64` 底座，秒级完成 OpenClaw 核心与技能包升级）。
+* **[`win/entrypoint.sh`](./win/entrypoint.sh)**：Windows 容器启动入口（内置商业授权校验、`openclaw.json` 基因播种、SQLite 路径自适应修复及 Windows 文件系统兼容补丁）。
+* **[`.github/workflows/build-win-image.yml`](./.github/workflows/build-win-image.yml)**：GitHub Actions 云端自动化构建流水线，自动编译 `win/` 目录并发布至 `ghcr.io/jamesxie2025/jimi-pro`。
 
-# 拉取最新的阿里云镜像
+### 2. macOS Apple Silicon 专享版（仓库根目录 — `linux/arm64` 架构）
+专为搭载 Apple M 系列芯片（M1/M2/M3/M4）的 Mac 打造：
+* **[`docker-compose.yml`](./docker-compose.yml)**：macOS 容器编排配置。
+* **[`run.sh`](./run.sh)**：macOS 本地一键启动与更新脚本。
+* **[`.env.example`](./.env.example)**：macOS 环境变量与硬件内存配额配置模板。
+* **[`Dockerfile.base`](./Dockerfile.base) & [`Dockerfile`](./Dockerfile)**：macOS (`linux/arm64`) 全量算力底座与极速增量构建文件。
+* **[`release.sh`](./release.sh)**：macOS 本地构建与发布脚本。
+* **[`entrypoint.sh`](./entrypoint.sh)**：macOS 容器启动入口与自愈引擎。
+
+---
+
+## 💻 Windows 用户快速安装与启动指南
+
+### 1. 环境准备
+1. 安装并启动 **Docker Desktop for Windows**（确保启用 WSL2 后端）。
+2. 下载本仓库（或仅下载 `win/` 目录下的全部文件）。
+
+### 2. 一键启动
+1. 进入 `win` 文件夹，双击运行 **`run.bat`**（或在 PowerShell 中执行 `.\run.ps1`）。
+2. 首次运行时，脚本会自动从 `.env.example` 生成 `.env` 配置文件。请打开 `win/.env` 填写必要的 `DEEPSEEK_API_KEY`（及授权码 `LICENSE_KEY`）。
+3. 再次双击 **`run.bat`**，脚本将自动从 GitHub (`ghcr.io/jamesxie2025/jimi-pro`) 拉取最新镜像并启动容器。
+4. 启动完成后，在浏览器访问：
+   * **控制台地址**：`http://localhost:18789`
+   * **默认网关令牌 (Gateway Token)**：`Jimi_Agent_2026`
+
+### 3. 手动命令行启动（可选）
+```powershell
+cd win
+Copy-Item .env.example .env
+# 编辑 .env 填写 DEEPSEEK_API_KEY 后执行：
 docker compose pull
-
-# 后台启动服务
 docker compose up -d
 ```
 
 ---
 
-## 🔑 商业授权码激活 (管理员使用)
+## 🍎 macOS (Apple Silicon) 用户快速安装与启动指南
 
-当需要给客户授权时，在终端运行：
+### 1. 一键启动
+在仓库根目录下打开终端执行：
 ```bash
-./license.sh
+./run.sh
 ```
-根据提示输入客户机器生成的 **Machine ID (设备识别码)** 以及 **到期日期** (如 `20270513`)，即可生成 `LICENSE_KEY`。客户将该行配置填入其 `.env` 文件即可完成授权。
+* 首次运行会自动从 `.env.example` 生成 `.env`，填写 `DEEPSEEK_API_KEY` 后再次运行 `./run.sh` 即可自动拉取镜像并启动服务。
+
+### 2. 本地构建与发布更新（维护者使用）
+* **macOS 镜像构建**：在根目录执行 `./release.sh [版本号]`（自动检测 `:base-env` 底座并执行秒级增量热升级）。
+* **Windows 镜像构建**：推送代码至 GitHub `main` 分支（或在 GitHub Actions 页面手动触发 `Build Windows (AMD64) OpenClaw Image` 工作流），即可在 GitHub 云端自动构建并发布至 `ghcr.io/jamesxie2025/jimi-pro`。
+

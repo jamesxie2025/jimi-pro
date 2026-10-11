@@ -5,10 +5,9 @@ on:
     branches:
       - main
     paths:
-      - 'win/**'
-      - 'Dockerfile*'
-      - 'entrypoint.sh'
-      - 'skills/**'
+      - 'win/Dockerfile*'
+      - 'win/entrypoint.sh'
+      - 'win/skills/**'
       - '.github/workflows/build-win-image.yml'
   workflow_dispatch:
     inputs:
@@ -36,11 +35,6 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - name: Free up runner disk space for large AI/Docker layers
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
-          df -h
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -79,6 +73,7 @@ jobs:
       - name: Build & Push Windows Image (Full Base Build - Dockerfile.base)
         if: steps.meta.outputs.need_base == 'true'
         run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
           VER="${{ steps.meta.outputs.version }}"
           docker buildx build \
             --platform linux/amd64 \

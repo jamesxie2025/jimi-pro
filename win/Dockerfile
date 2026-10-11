@@ -3,7 +3,7 @@
 # ==============================================================================
 # 架构设计说明：
 # 1. Stage 1 (openclaw-upstream): 拉取指定新版官方 OpenClaw 镜像 (linux/amd64)，仅提取其 /app 核心引擎。
-# 2. Stage 2 (base-env-amd64): 直接复用阿里云已固化的 Windows 算力底座 (:base-env-amd64)，
+# 2. Stage 2 (base-env-amd64): 直接复用 GitHub (ghcr.io) 已固化的 Windows 算力底座 (:base-env-amd64)，
 #    内含全部 Debian 系统库、100+ Python AI/科学计算包、纯 CPU PyTorch、Manim、Playwright 与预置插件种子。
 # 3. 仅将新版 OpenClaw 核心 (/app) 注入底座，并同步最新 skills/ 与 entrypoint.sh。
 #    ✨ 优势：全程 0 apt 下载、0 pip 编译，几十秒即可完成 Windows 版本升级！
