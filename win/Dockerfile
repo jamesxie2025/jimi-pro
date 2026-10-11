@@ -11,7 +11,7 @@
 # ==============================================================================
 
 ARG OPENCLAW_VER=2026.10.1
-ARG BASE_IMAGE=crpi-wwpcz74kapvboxgq.cn-shenzhen.personal.cr.aliyuncs.com/jimi-pro/jimi-agent:base-env-amd64
+ARG BASE_IMAGE=ghcr.io/jamesxie2025/jimi-pro:base-env-amd64
 FROM ghcr.io/openclaw/openclaw:${OPENCLAW_VER} AS openclaw-upstream
 
 FROM ${BASE_IMAGE}

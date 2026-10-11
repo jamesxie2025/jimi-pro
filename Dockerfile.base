@@ -3,14 +3,16 @@
 # ==============================================================================
 # 用途说明：
 # 本文件仅在需要“从零重构底层 Debian 系统库 / 新增 Python AI 依赖包”时使用。
-# 日常升级 OpenClaw 版本（如 2026.10.1 -> 2026.10.2）或更新 skills / entrypoint.sh 时，
+# 日常升级 OpenClaw 版本（如 2026.9.9 -> 2026.10.1）或更新 skills / entrypoint.sh 时，
 # 请直接使用默认的 Dockerfile（基于 :base-env 极速热升级，无需重装任何依赖）。
+#
+# 如需重构底座并更新 :base-env，可执行：
+# docker buildx build --platform linux/arm64 -f Dockerfile.base -t crpi-wwpcz74kapvboxgq.cn-shenzhen.personal.cr.aliyuncs.com/jimi-pro/jimi-agent:base-env --push .
 # ==============================================================================
 ARG OPENCLAW_VER=2026.10.1
 FROM ghcr.io/openclaw/openclaw:${OPENCLAW_VER}
 
 USER root
-ARG USE_CN_MIRRORS=1
 
 # 1. 环境变量与全路径对齐 (8线程满血 + 限制 uv 并发数为 8 防止镜像站 429 限流)
 ENV TZ=Asia/Shanghai \
@@ -31,12 +33,12 @@ ENV TZ=Asia/Shanghai \
     PYTHONPATH="/usr/local/lib/python3.11/dist-packages" \
     PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin:/usr/local/lib/python3.11/dist-packages/bin:/root/.local/bin:$PATH" \
     DEBIAN_FRONTEND=noninteractive \
-    FS_SAFE_NATIVE_MODE=auto \
-    OPENCLAW_FS_SAFE_NATIVE_MODE=auto \
+    FS_SAFE_NATIVE_MODE=off \
+    OPENCLAW_FS_SAFE_NATIVE_MODE=off \
     NODE_COMPILE_CACHE=/var/tmp/openclaw-compile-cache \
     OPENCLAW_NO_RESPAWN=1
 
-# 2. 系统依赖补完 (支持国内中科大源与海外官方源自动切换)
+# 2. 系统依赖补完 (强制直连中科大源，禁用代理)
 RUN export HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= NO_PROXY="*" no_proxy="*" && \
     echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/99proxy-tuning && \
     echo 'Acquire::http::Timeout "30";' >> /etc/apt/apt.conf.d/99proxy-tuning && \
@@ -44,9 +46,7 @@ RUN export HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= NO_PROXY="*" no_pro
     echo 'Acquire::http::Max-Control-Connections "4";' >> /etc/apt/apt.conf.d/99proxy-tuning && \
     echo 'Acquire::http::Proxy "false";' >> /etc/apt/apt.conf.d/99proxy-tuning && \
     echo 'Acquire::https::Proxy "false";' >> /etc/apt/apt.conf.d/99proxy-tuning && \
-    if [ "$USE_CN_MIRRORS" = "1" ]; then \
-        find /etc/apt/ -type f -exec sed -i -E "s@https?://(deb.debian.org|mirrors.aliyun.com|mirrors.tuna.tsinghua.edu.cn)@http://mirrors.ustc.edu.cn@g" {} +; \
-    fi && \
+    find /etc/apt/ -type f -exec sed -i -E "s@https?://(deb.debian.org|mirrors.aliyun.com|mirrors.tuna.tsinghua.edu.cn)@http://mirrors.ustc.edu.cn@g" {} + && \
     apt-get update && apt-get install -y --fix-missing --no-install-recommends \
     build-essential g++ gcc cmake python3-dev python3-pip python3-venv pkg-config ninja-build \
     wget curl zip unzip jq bc tini ffmpeg imagemagick pandoc antiword poppler-utils \
@@ -75,19 +75,14 @@ RUN raw_arch=$(dpkg --print-architecture) && \
       ln -sf /usr/local/bin/dreamina /usr/local/bin/jimeng; \
     fi
 
-# 4. Python 技能库全量注入
+# 4. Python 技能库全量注入 (使用阿里云商业 CDN 镜像源 + 8并发限制，彻底杜绝高校镜像站 429 Too Many Requests)
 RUN export HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= && \
-    if [ "$USE_CN_MIRRORS" = "1" ]; then \
-        pip3 install uv -i https://mirrors.aliyun.com/pypi/simple/ --break-system-packages || pip3 install uv --break-system-packages; \
-    else \
-        pip3 install uv --break-system-packages; \
-    fi
+    pip3 install uv -i https://mirrors.aliyun.com/pypi/simple/ --break-system-packages
 
 # 第一批：通用包
 RUN export HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= UV_CONCURRENT_DOWNLOADS=8 UV_HTTP_TIMEOUT=120 && \
-    PYPI_URL=$([ "$USE_CN_MIRRORS" = "1" ] && echo "https://mirrors.aliyun.com/pypi/simple/" || echo "https://pypi.org/simple") && \
     uv pip install --system --no-cache --break-system-packages \
-    --index-url "$PYPI_URL" \
+    --index-url https://mirrors.aliyun.com/pypi/simple/ \
     "pandas<3.0.0" numpy numexpr polars duckdb pyarrow fastparquet SQLAlchemy \
     psycopg2-binary fasteners pydantic pyxlsb matplotlib seaborn scikit-learn \
     lightgbm statsmodels scipy pandas-ta-classic akshare yfinance chinesecalendar \
@@ -104,74 +99,62 @@ RUN ARCH=$(dpkg --print-architecture) && \
             torch torchvision --index-url https://download.pytorch.org/whl/cpu; \
     else \
         export HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= UV_CONCURRENT_DOWNLOADS=8 UV_HTTP_TIMEOUT=120 && \
-        PYPI_URL=$([ "$USE_CN_MIRRORS" = "1" ] && echo "https://mirrors.aliyun.com/pypi/simple/" || echo "https://pypi.org/simple") && \
         uv pip install --system --no-cache --break-system-packages \
-            --index-url "$PYPI_URL" \
+            --index-url https://mirrors.aliyun.com/pypi/simple/ \
             "torch==2.5.1" "torchvision==0.20.1"; \
     fi
 
 # 第三批：AI 工具链
 RUN export HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= UV_CONCURRENT_DOWNLOADS=8 UV_HTTP_TIMEOUT=120 && \
-    PYPI_URL=$([ "$USE_CN_MIRRORS" = "1" ] && echo "https://mirrors.aliyun.com/pypi/simple/" || echo "https://pypi.org/simple") && \
     uv pip install --system --no-cache --break-system-packages \
-    --index-url "$PYPI_URL" \
+    --index-url https://mirrors.aliyun.com/pypi/simple/ \
     "torch<2.6" "torchvision<0.21" \
     unstructured[pdf] docling librosa chromadb easyocr "rembg[cli]"
 
 # 第四批：manim
 RUN export HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= UV_CONCURRENT_DOWNLOADS=8 UV_HTTP_TIMEOUT=120 && \
-    PYPI_URL=$([ "$USE_CN_MIRRORS" = "1" ] && echo "https://mirrors.aliyun.com/pypi/simple/" || echo "https://pypi.org/simple") && \
     uv pip install --system --no-cache --break-system-packages \
-    --index-url "$PYPI_URL" manim || \
+    --index-url https://mirrors.aliyun.com/pypi/simple/ manim || \
     echo "⚠️  manim 安装失败（非致命），跳过"
 
 # 第五批：PaddlePaddle
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "amd64" ]; then \
         export HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= UV_CONCURRENT_DOWNLOADS=8 UV_HTTP_TIMEOUT=120 && \
-        PYPI_URL=$([ "$USE_CN_MIRRORS" = "1" ] && echo "https://mirrors.aliyun.com/pypi/simple/" || echo "https://pypi.org/simple") && \
         uv pip install --system --no-cache --break-system-packages \
-            --index-url "$PYPI_URL" \
+            --index-url https://mirrors.aliyun.com/pypi/simple/ \
             paddlepaddle paddleocr; \
     else \
         echo "⚠️  arm64: paddlepaddle 官方无预编译轮子，已跳过"; \
     fi
 
 # 5. 浏览器固化
-RUN if [ "$USE_CN_MIRRORS" = "1" ]; then \
-        (export HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= PLAYWRIGHT_DOWNLOAD_HOST=https://registry.npmmirror.com/-/binary/playwright && \
-         playwright install chromium --with-deps) || playwright install chromium --with-deps; \
-    else \
-        playwright install chromium --with-deps; \
-    fi
+RUN (export HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= PLAYWRIGHT_DOWNLOAD_HOST=https://registry.npmmirror.com/-/binary/playwright && \
+     playwright install chromium --with-deps) || \
+    playwright install chromium --with-deps
 
 # 5.5. 预装 OpenClaw 常用插件并固化到种子目录
 RUN export HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= npm_config_proxy= npm_config_https_proxy= \
-    FS_SAFE_NATIVE_MODE=auto OPENCLAW_FS_SAFE_NATIVE_MODE=auto && \
-    if [ "$USE_CN_MIRRORS" = "1" ]; then \
-        npm config set registry https://registry.npmmirror.com; \
-    fi && \
-    openclaw plugins install @openclaw/deepseek-provider --accept-capabilities --acknowledge-install-policy-warning --force && \
-    openclaw plugins install @openclaw/memory-lancedb --accept-capabilities --acknowledge-install-policy-warning --force && \
-    openclaw plugins install @tencent-weixin/openclaw-weixin --accept-capabilities --acknowledge-install-policy-warning --force && \
-    openclaw plugins install @openclaw/tavily-plugin --accept-capabilities --acknowledge-install-policy-warning --force && \
-    openclaw plugins install @openclaw/brave-plugin --accept-capabilities --acknowledge-install-policy-warning --force && \
-    openclaw plugins install @openclaw/qwen-provider --accept-capabilities --acknowledge-install-policy-warning --force && \
-    openclaw plugins install @openclaw/byteplus-provider --accept-capabilities --acknowledge-install-policy-warning --force && \
-    openclaw plugins install @openclaw/moonshot-provider --accept-capabilities --acknowledge-install-policy-warning --force && \
+    FS_SAFE_NATIVE_MODE=off OPENCLAW_FS_SAFE_NATIVE_MODE=off && \
+    npm config set registry https://registry.npmmirror.com && \
+    openclaw plugins install @openclaw/deepseek-provider --accept-capabilities && \
+    openclaw plugins install @openclaw/memory-lancedb --accept-capabilities && \
+    openclaw plugins install @tencent-weixin/openclaw-weixin --accept-capabilities && \
+    openclaw plugins install @openclaw/tavily-plugin --accept-capabilities && \
+    openclaw plugins install @openclaw/brave-plugin --accept-capabilities && \
+    openclaw plugins install @openclaw/qwen-provider --accept-capabilities && \
+    openclaw plugins install @openclaw/byteplus-provider --accept-capabilities && \
+    openclaw plugins install @openclaw/moonshot-provider --accept-capabilities && \
     if [ -d /root/.openclaw/npm ]; then \
-        mv /root/.openclaw/npm /app/plugins-seed && \
-        rm -rf /root/.openclaw/* /root/.openclaw/.[!.]* 2>/dev/null || true; \
+        mv /root/.openclaw/npm /app/plugins-seed; \
     else \
         echo "❌ OpenClaw plugins failed to install!" && exit 1; \
     fi
 
-# 6. 最终权限审计与构建期预置底层兼容补丁
+# 6. 最终权限审计
 RUN chmod +x /usr/local/bin/duckdb 2>/dev/null || true && \
     chmod +x /usr/local/bin/dreamina 2>/dev/null || true && \
     chmod +x /usr/local/bin/jimeng 2>/dev/null || true && \
-    ln -sf /app/openclaw.mjs /usr/local/bin/openclaw && \
-    chmod +x /app/openclaw.mjs /usr/local/bin/openclaw && \
     mkdir -p /root/.openclaw /data && \
     chmod -R 777 /data && \
     chmod 1777 /tmp
@@ -180,9 +163,7 @@ COPY skills/ /app/workspace/skills/
 RUN chmod -R 777 /app/workspace/skills
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh && \
-    sed -n '/^# BEGIN_DIST_PATCH/,/^# END_DIST_PATCH/p' /usr/local/bin/entrypoint.sh | bash && \
-    touch /app/.jimi_dist_patched
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 USER root
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

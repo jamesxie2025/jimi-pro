@@ -6,7 +6,7 @@
 
 services:
   jim-agent:
-    image: crpi-wwpcz74kapvboxgq.cn-shenzhen.personal.cr.aliyuncs.com/jimi-pro/jimi-agent:${IMAGE_TAG:-2026.10.1}
+    image: ghcr.io/jamesxie2025/jimi-pro:${IMAGE_TAG:-2026.10.1}
     container_name: jimi-agent-pro
     user: "root"
     restart: always

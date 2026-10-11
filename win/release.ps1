@@ -17,8 +17,8 @@ if (Test-Path "..\.openclaw\workspace\skills") {
     Copy-Item -Path "..\.openclaw\workspace\skills\*" -Destination "skills\" -Recurse -Force
 }
 
-$REGISTRY = "crpi-wwpcz74kapvboxgq.cn-shenzhen.personal.cr.aliyuncs.com/jimi-pro"
-$IMAGE_NAME = "jimi-agent"
+$REGISTRY = "ghcr.io/jamesxie2025"
+$IMAGE_NAME = "jimi-pro"
 $VERSION = $Version
 
 $AMD64_IMAGE = "${REGISTRY}/${IMAGE_NAME}:${VERSION}-amd64"

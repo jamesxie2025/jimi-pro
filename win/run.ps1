@@ -33,7 +33,7 @@ if (!(Test-Path ".openclaw\ssh")) { New-Item -ItemType Directory -Path ".opencla
 if (!(Test-Path "Materials")) { New-Item -ItemType Directory -Path "Materials" | Out-Null }
 
 # 4. 拉取最新镜像并启动容器
-Write-Host "🔄 正在从阿里云拉取最新镜像..." -ForegroundColor Cyan
+Write-Host "🔄 正在从 GitHub (ghcr.io/jamesxie2025/jimi-pro) 拉取最新镜像..." -ForegroundColor Cyan
 docker compose pull
 
 Write-Host "🚀 正在启动吉米·智驱容器..." -ForegroundColor Green
