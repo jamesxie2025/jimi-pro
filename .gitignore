@@ -38,3 +38,4 @@ __pycache__/
 /run.sh
 /.env.example
 /skills/
+/deployment_guide.md
