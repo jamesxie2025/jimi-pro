@@ -1,0 +1,79 @@
+# ============================================================
+# docker-compose.yml - 吉米·智驱 部署配置
+# ============================================================
+# 硬件与性能配置说明（所有变量均直接在 .env 文件中设置）：
+#
+#  电脑总内存 │ MEM_LIMIT │ MEM_RESERVATION │ NODE_MEM_LIMIT │ FFMPEG_THREADS │ MAX_PAYLOAD_SIZE
+#  ─────────┼───────────┼─────────────────┼────────────────┼────────────────┼─────────────────
+#   8  GB   │    4g     │       1g        │      2560      │       2        │      100M
+#   16 GB   │    8g     │       2g        │      6144      │       4        │      200M   ← 主流默认
+#   24 GB   │   12g     │       3g        │      8192      │       6        │      200M
+#   32 GB   │   16g     │       4g        │     12288      │       8        │      300M
+#   40 GB   │   24g     │       6g        │     16384      │       8        │      300M
+#   48 GB   │   28g     │       6g        │     20480      │       8        │      500M
+#   64 GB+  │   40g     │       8g        │     28672      │       8        │      500M
+#
+# 修改方法：只需在 .env 文件修改对应变量，本文件会自动读取并生效。
+# ============================================================
+
+services:
+  jim-agent:
+    image: crpi-wwpcz74kapvboxgq.cn-shenzhen.personal.cr.aliyuncs.com/jimi-pro/jimi-agent:${IMAGE_TAG:-latest}
+    container_name: jimi-agent-pro
+    user: "root"
+    restart: always
+
+    # 容器内存限制：从 .env 读取，完全去固化
+    mem_limit: ${MEM_LIMIT}
+    # 容器预留内存：从 .env 读取，完全去固化
+    mem_reservation: ${MEM_RESERVATION}
+
+    env_file:
+      - .env
+
+    environment:
+      - TZ=Asia/Shanghai
+      - HOME=/root
+      # Node.js 堆内存上限（MB），从 .env 读取
+      - NODE_MEM_LIMIT=${NODE_MEM_LIMIT}
+      # FFmpeg 视频处理核心线程数，从 .env 读取
+      - FFMPEG_THREADS=${FFMPEG_THREADS}
+      # 最大上传与 Payload 限制，从 .env 读取
+      - MAX_PAYLOAD_SIZE=${MAX_PAYLOAD_SIZE}
+      # Node.js 运行时参数（若在 .env 中自定义则覆盖/合成）
+      - NODE_OPTIONS=${NODE_OPTIONS}
+      - OPENCLAW_GATEWAY_BIND=auto
+      - OPENCLAW_GATEWAY_CONTROL_UI_ALLOWED_ORIGINS=*
+      - OPENCLAW_ALLOW_OLDER_BINARY_DESTRUCTIVE_ACTIONS=1
+      # 宿主机动态环境透传（供 Web UI xdg-open 穿透宿主机打开 VS Code / Finder）
+      - HOST_USER=${USER:-xwxie}
+      - HOST_HOME=${HOME:-/root}
+      - HOST_PWD=${PWD:-/app}
+
+    ports:
+      - "18789:18789"
+
+    volumes:
+      # .openclaw：持久化配置、授权、记忆、工作区（重要：不要删除此目录）
+      - ./.openclaw:/root/.openclaw
+      # 宿主机主目录挂载，使用 HOME 变量以兼容不同本机的用户目录路径，供智能体直接读写/修复宿主机文件
+      - ${HOME:-/root}:/host
+      # Docker Socket 挂载，赋予智能体管理宿主机其他 Docker 容器的权限
+      - /var/run/docker.sock:/var/run/docker.sock
+      # SSH 密钥持久化挂载，用于本机 SSH 免密穿透
+      - ./.openclaw/ssh:/root/.ssh
+      # entrypoint.sh：本地映射测试（⚠️ 交付和日常部署请保持注释，确保 100% 使用镜像内打好兼容补丁的启动程序）
+      # - ./entrypoint.sh:/usr/local/bin/entrypoint.sh
+      # skills：本地映射测试（仅开发者本地映射调试使用）
+      # - ./skills:/app/workspace/skills
+      # Materials：客户素材输入目录，映射到容器 /data
+      - ./Materials:/data
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

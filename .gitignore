@@ -1,0 +1,29 @@
+# 严禁上传商业授权算号器与私人脚本
+license.sh
+win/license.sh
+*license*.sh
+sync.sh
+make_key.sh
+
+# 严禁上传含真实密钥的本地环境变量配置与私密笔记（仅允许上传 .env.example 模板）
+.env
+win/.env
+.env.openclaw
+.env.local
+Readme1.md
+Readme.md
+
+# 忽略本地运行时数据、素材与临时目录
+.openclaw/
+win/.openclaw/
+Materials/
+win/Materials/
+Michelle_Output/
+Jimi_Output/
+data/
+gdrive/
+jimi-bridge/
+.DS_Store
+**/.DS_Store
+__pycache__/
+**/__pycache__/

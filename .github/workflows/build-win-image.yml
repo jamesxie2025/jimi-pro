@@ -1,0 +1,154 @@
+name: Build Windows (AMD64) OpenClaw Image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'win/**'
+      - 'Dockerfile*'
+      - 'entrypoint.sh'
+      - 'skills/**'
+      - '.github/workflows/build-win-image.yml'
+  workflow_dispatch:
+    inputs:
+      openclaw_ver:
+        description: 'OpenClaw Version (e.g. 2026.10.1)'
+        required: true
+        default: '2026.10.1'
+      force_base_rebuild:
+        description: 'Force full rebuild of base-env-amd64 from Dockerfile.base'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  ACR_REGISTRY: crpi-wwpcz74kapvboxgq.cn-shenzhen.personal.cr.aliyuncs.com
+  ACR_REPO: crpi-wwpcz74kapvboxgq.cn-shenzhen.personal.cr.aliyuncs.com/jimi-pro/jimi-agent
+  GHCR_REPO: ghcr.io/jamesxie2025/jimi-pro
+
+jobs:
+  build-windows-amd64:
+    name: Build & Push Windows (linux/amd64) Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      ACR_USER: ${{ secrets.ACR_USERNAME }}
+      ACR_PASS: ${{ secrets.ACR_PASSWORD }}
+
+    steps:
+      - name: Free up runner disk space for large AI/Docker layers
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Aliyun Container Registry (ACR)
+        if: env.ACR_USER != '' && env.ACR_PASS != ''
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ACR_REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Determine OpenClaw version & base image availability
+        id: meta
+        run: |
+          VER="${{ github.event.inputs.openclaw_ver }}"
+          if [ -z "$VER" ]; then
+            VER=$(grep -E '^ARG OPENCLAW_VER=' win/Dockerfile | head -n1 | cut -d'=' -f2 | tr -d '[:space:]')
+            VER="${VER:-2026.10.1}"
+          fi
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+
+          HAS_ACR="false"
+          if [ -n "${ACR_USER}" ] && [ -n "${ACR_PASS}" ]; then
+            HAS_ACR="true"
+          fi
+          echo "has_acr=${HAS_ACR}" >> "$GITHUB_OUTPUT"
+
+          NEED_BASE="true"
+          BASE_IMG=""
+          if [ "${{ github.event.inputs.force_base_rebuild }}" != "true" ]; then
+            if docker buildx imagetools inspect "${GHCR_REPO}:base-env-amd64" >/dev/null 2>&1; then
+              NEED_BASE="false"
+              BASE_IMG="${GHCR_REPO}:base-env-amd64"
+            elif [ "$HAS_ACR" = "true" ] && docker buildx imagetools inspect "${ACR_REPO}:base-env-amd64" >/dev/null 2>&1; then
+              NEED_BASE="false"
+              BASE_IMG="${ACR_REPO}:base-env-amd64"
+            fi
+          fi
+          echo "need_base=${NEED_BASE}" >> "$GITHUB_OUTPUT"
+          echo "base_img=${BASE_IMG}" >> "$GITHUB_OUTPUT"
+          echo "📌 Target Version: ${VER} | Build Base: ${NEED_BASE} | Base Image: ${BASE_IMG:-N/A}"
+
+      - name: Build & Push Windows Image (Full Base Build - Dockerfile.base)
+        if: steps.meta.outputs.need_base == 'true'
+        run: |
+          VER="${{ steps.meta.outputs.version }}"
+          TAGS="-t ${GHCR_REPO}:base-env-amd64 -t ${GHCR_REPO}:${VER}-amd64 -t ${GHCR_REPO}:${VER} -t ${GHCR_REPO}:latest"
+          if [ "${{ steps.meta.outputs.has_acr }}" = "true" ]; then
+            TAGS="${TAGS} -t ${ACR_REPO}:base-env-amd64 -t ${ACR_REPO}:${VER}-amd64"
+          fi
+          docker buildx build \
+            --platform linux/amd64 \
+            --provenance=false \
+            --sbom=false \
+            --build-arg OPENCLAW_VER="${VER}" \
+            --build-arg USE_CN_MIRRORS=0 \
+            -f win/Dockerfile.base \
+            ${TAGS} \
+            --push ./win
+
+      - name: Build & Push Windows Image (Fast Incremental Build - Dockerfile)
+        if: steps.meta.outputs.need_base == 'false'
+        run: |
+          VER="${{ steps.meta.outputs.version }}"
+          BASE_IMG="${{ steps.meta.outputs.base_img }}"
+          TAGS="-t ${GHCR_REPO}:${VER}-amd64 -t ${GHCR_REPO}:${VER} -t ${GHCR_REPO}:latest"
+          if [ "${{ steps.meta.outputs.has_acr }}" = "true" ]; then
+            TAGS="${TAGS} -t ${ACR_REPO}:${VER}-amd64"
+          fi
+          docker buildx build \
+            --platform linux/amd64 \
+            --provenance=false \
+            --sbom=false \
+            --build-arg OPENCLAW_VER="${VER}" \
+            --build-arg BASE_IMAGE="${BASE_IMG}" \
+            -f win/Dockerfile \
+            ${TAGS} \
+            --push ./win
+
+      - name: Merge Multi-Arch Manifest on Aliyun ACR (Mac arm64 + Windows amd64)
+        if: steps.meta.outputs.has_acr == 'true'
+        run: |
+          VER="${{ steps.meta.outputs.version }}"
+          ARM64_IMG="${ACR_REPO}:${VER}-arm64"
+          AMD64_IMG="${ACR_REPO}:${VER}-amd64"
+          FULL_IMG="${ACR_REPO}:${VER}"
+          LATEST_IMG="${ACR_REPO}:latest"
+
+          if docker buildx imagetools inspect "${ARM64_IMG}" >/dev/null 2>&1; then
+            echo "🔗 Merging Mac (${ARM64_IMG}) + Windows (${AMD64_IMG}) into unified multi-arch manifest..."
+            docker buildx imagetools create -t "${FULL_IMG}" -t "${LATEST_IMG}" "${ARM64_IMG}" "${AMD64_IMG}"
+          else
+            echo "ℹ️ Mac arm64 image (${ARM64_IMG}) not found; tagging Windows amd64 image as ${FULL_IMG}..."
+            docker buildx imagetools create -t "${FULL_IMG}" "${AMD64_IMG}"
+          fi
+          echo "✅ Multi-arch manifest published successfully!"

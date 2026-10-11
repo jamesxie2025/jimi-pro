@@ -1,0 +1,54 @@
+# ============================================================
+# docker-compose.yml - 吉米·智驱 (Windows / PC 专享版) 部署配置
+# ============================================================
+# 修改方法：只需在同目录 .env 文件修改对应变量，本文件会自动读取并生效。
+# ============================================================
+
+services:
+  jim-agent:
+    image: crpi-wwpcz74kapvboxgq.cn-shenzhen.personal.cr.aliyuncs.com/jimi-pro/jimi-agent:${IMAGE_TAG:-2026.10.1}
+    container_name: jimi-agent-pro
+    user: "root"
+    restart: always
+
+    # 容器内存限制：从 .env 读取（Windows 16G 电脑默认 8g）
+    mem_limit: ${MEM_LIMIT:-8g}
+    mem_reservation: ${MEM_RESERVATION:-2g}
+
+    env_file:
+      - .env
+
+    environment:
+      - TZ=Asia/Shanghai
+      - HOME=/root
+      - NODE_MEM_LIMIT=${NODE_MEM_LIMIT:-6144}
+      - FFMPEG_THREADS=${FFMPEG_THREADS:-4}
+      - MAX_PAYLOAD_SIZE=${MAX_PAYLOAD_SIZE:-200M}
+      - NODE_OPTIONS=${NODE_OPTIONS:-}
+      - OPENCLAW_GATEWAY_BIND=auto
+      - OPENCLAW_GATEWAY_CONTROL_UI_ALLOWED_ORIGINS=*
+      - OPENCLAW_ALLOW_OLDER_BINARY_DESTRUCTIVE_ACTIONS=1
+      - FS_SAFE_NATIVE_MODE=auto
+      - OPENCLAW_FS_SAFE_NATIVE_MODE=auto
+
+    ports:
+      - "18789:18789"
+
+    volumes:
+      # .openclaw：持久化配置、商业授权锁、记忆、工作区（重要：不要删除此目录）
+      - ./.openclaw:/root/.openclaw
+      # Docker Socket 挂载，赋予智能体调度宿主机其他 Docker 容器的权限
+      - //var/run/docker.sock:/var/run/docker.sock
+      # SSH 密钥持久化挂载
+      - ./.openclaw/ssh:/root/.ssh
+      # Materials：客户素材输入目录，映射到容器 /data
+      - ./Materials:/data
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
