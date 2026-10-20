@@ -10,7 +10,7 @@
 #    （注：首次构建或需修改底层 Python/Debian 依赖库时，release.ps1 会自动调用 Dockerfile.base）
 # ==============================================================================
 
-ARG OPENCLAW_VER=2026.10.1
+ARG OPENCLAW_VER=2026.10.5
 ARG BASE_IMAGE=ghcr.io/jamesxie2025/jimi-pro:base-env-amd64
 FROM ghcr.io/openclaw/openclaw:${OPENCLAW_VER} AS openclaw-upstream
 

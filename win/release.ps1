@@ -4,11 +4,25 @@
 # 用法: .\release.ps1 [版本号，默认 2026.10.1]
 # =========================================================================
 param(
-    [string]$Version = "2026.10.1"
+    [string]$Version = ""
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
+
+# 优先读取命令行传参，次优先读取 .env 中的 IMAGE_TAG，最后兜底默认值
+$CLI_PASSED = -not [string]::IsNullOrWhiteSpace($PSBoundParameters['Version'])
+
+if ([string]::IsNullOrWhiteSpace($Version) -and (Test-Path ".env")) {
+    $envTag = Get-Content ".env" | Where-Object { $_ -match '^\s*(IMAGE_TAG|OPENCLAW_VER)\s*=\s*(.+)$' } | Select-Object -Last 1
+    if ($envTag -match '^\s*(IMAGE_TAG|OPENCLAW_VER)\s*=\s*(.+)$') {
+        $Version = $Matches[2].Trim("`"' ")
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    $Version = "2026.10.5"
+}
 
 # 0. 自动同步本地技能
 if (Test-Path "..\.openclaw\workspace\skills") {
@@ -26,15 +40,16 @@ $BASE_AMD64_IMAGE = "${REGISTRY}/${IMAGE_NAME}:base-env-amd64"
 $FULL_IMAGE_NAME = "${REGISTRY}/${IMAGE_NAME}:${VERSION}"
 $LATEST_IMAGE_NAME = "${REGISTRY}/${IMAGE_NAME}:latest"
 
-# 自动同步版本号到 Dockerfile 与 .env
+# 自动同步版本号到 Dockerfile 与 Dockerfile.base
 if (Test-Path "Dockerfile") {
     (Get-Content "Dockerfile") -replace '^ARG OPENCLAW_VER=.*', "ARG OPENCLAW_VER=$VERSION" | Set-Content "Dockerfile"
 }
 if (Test-Path "Dockerfile.base") {
     (Get-Content "Dockerfile.base") -replace '^ARG OPENCLAW_VER=.*', "ARG OPENCLAW_VER=$VERSION" | Set-Content "Dockerfile.base"
 }
-if (Test-Path ".env") {
-    (Get-Content ".env") -replace '^IMAGE_TAG=.*', "IMAGE_TAG=$VERSION" | Set-Content ".env"
+# 仅当显式传入命令行版本时才写回 .env，避免覆盖用户在 .env 中设置的自定义值
+if ($CLI_PASSED -and (Test-Path ".env")) {
+    (Get-Content ".env") -replace '^\s*IMAGE_TAG=.*', "IMAGE_TAG=$VERSION" | Set-Content ".env"
 }
 
 # 检查 Docker 守护进程

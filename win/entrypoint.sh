@@ -265,7 +265,7 @@ if [ ! -s "$CONFIG_FILE" ] || ! grep -q '"models"' "$CONFIG_FILE" 2>/dev/null; t
         "baseUrl": "REPLACE_DEEPSEEK_BASE_URL", "api": "openai-completions",
         "apiKey": "REPLACE_DEEPSEEK_KEY",
         "models": [
-          { "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash" },
+          { "id": "deepseek-flash", "name": "DeepSeek Flash", "input": ["text", "image"] },
           { "id": "deepseek-v4-pro", "name": "DeepSeek V4 Pro" }
         ],
         "timeoutSeconds": 600
@@ -378,7 +378,7 @@ fi
 
 # 🌟 核心修复：用 jq 精准注入 Key（每次启动都根据 .env 同步，防掉线、防失效）
 # 动态解析 PRIMARY_MODEL, FALLBACK_MODEL_1, FALLBACK_MODEL_2，将其加入支持的 models 列表中
-DEEPSEEK_MODELS=("deepseek-v4-flash" "deepseek-v4-pro")
+DEEPSEEK_MODELS=("deepseek-flash" "deepseek-v4-pro")
 AGNES_MODELS=("agnes-2.0-flash")
 
 add_model_id() {
@@ -410,20 +410,20 @@ add_model_id() {
   fi
 }
 
-add_model_id "${PRIMARY_MODEL:-deepseek/deepseek-v4-flash}"
+add_model_id "${PRIMARY_MODEL:-deepseek/deepseek-flash}"
 add_model_id "${FALLBACK_MODEL_1:-deepseek/deepseek-v4-pro}"
 add_model_id "${FALLBACK_MODEL_2:-agnes/agnes-2.0-flash}"
-DEEPSEEK_MODELS+=("deepseek-v4-flash-vision-exp")
 
 # 构建 deepseek models 的 JSON 数组
 ds_models_json="["
 for m in "${DEEPSEEK_MODELS[@]}"; do
   name="$m"
-  if [ "$m" = "deepseek-v4-flash" ]; then name="DeepSeek V4 Flash"; fi
-  if [ "$m" = "deepseek-v4-pro" ]; then name="DeepSeek V4 Pro"; fi
-  if [ "$m" = "deepseek-v4-flash-vision-exp" ]; then
-    name="DeepSeek V4 Flash Vision Exp"
+  if [ "$m" = "deepseek-flash" ]; then
+    name="DeepSeek Flash"
     ds_models_json="${ds_models_json}{\"id\":\"$m\",\"name\":\"$name\",\"input\":[\"text\",\"image\"]},"
+  elif [ "$m" = "deepseek-v4-pro" ]; then
+    name="DeepSeek V4 Pro"
+    ds_models_json="${ds_models_json}{\"id\":\"$m\",\"name\":\"$name\"},"
   else
     ds_models_json="${ds_models_json}{\"id\":\"$m\",\"name\":\"$name\"},"
   fi
@@ -450,7 +450,7 @@ jq --arg tok "${OPENCLAW_GATEWAY_TOKEN:-Jimi_Agent_2026}" \
    --arg tavily_url "${TAVILY_BASE_URL:-https://api.tavily.com}" \
    --arg brave_key "${BRAVE_API_KEY:-}" \
    --arg search_prov "${SEARCH_PROVIDER:-tavily}" \
-   --arg primary "${PRIMARY_MODEL:-deepseek/deepseek-v4-flash}" \
+   --arg primary "${PRIMARY_MODEL:-deepseek/deepseek-flash}" \
    --arg fallback1 "${FALLBACK_MODEL_1:-deepseek/deepseek-v4-pro}" \
    --arg fallback2 "${FALLBACK_MODEL_2:-agnes/agnes-2.0-flash}" \
    --arg embed_prov "${EMBEDDING_PROVIDER:-openai}" \
@@ -495,20 +495,20 @@ jq --arg tok "${OPENCLAW_GATEWAY_TOKEN:-Jimi_Agent_2026}" \
         "timeoutSeconds": 120,
         "models": [
           {
-            "id": "qwen3-vl-flash",
-            "name": "Qwen3 VL Flash (Vision)",
+            "id": "nano-banana-pro",
+            "name": "Nano Banana Pro",
             "reasoning": false,
             "input": ["text", "image"],
-            "contextWindow": 200000,
+            "contextWindow": 128000,
             "maxTokens": 8192,
             "api": "openai-completions"
           },
           {
-            "id": "qwen3-vl-plus",
-            "name": "Qwen3 VL Plus (Vision)",
+            "id": "gemini-3-pro-image-preview",
+            "name": "Gemini 3 Pro Image (Nano Banana Pro)",
             "reasoning": false,
             "input": ["text", "image"],
-            "contextWindow": 200000,
+            "contextWindow": 128000,
             "maxTokens": 8192,
             "api": "openai-completions"
           }
@@ -537,14 +537,17 @@ jq --arg tok "${OPENCLAW_GATEWAY_TOKEN:-Jimi_Agent_2026}" \
      .agents.defaults.models[$fallback1] = {} |
      .agents.defaults.models[$fallback2] = {} |
       .agents.defaults.imageModel = {
-        "primary": "apivy/qwen3-vl-plus",
+        "primary": "dashscope/qwen3-vl-flash",
         "fallbacks": [
-          "apivy/qwen3-vl-flash"
+          "dashscope/qwen3-vl-plus",
+          "deepseek/deepseek-flash"
         ],
         "timeoutMs": 90000
       } |
-      .agents.defaults.models["apivy/qwen3-vl-plus"] = {} |
-      .agents.defaults.models["apivy/qwen3-vl-flash"] = {} |
+      .agents.defaults.models["dashscope/qwen3-vl-flash"] = {} |
+      .agents.defaults.models["dashscope/qwen3-vl-plus"] = {} |
+      .agents.defaults.models["apivy/nano-banana-pro"] = {} |
+      .agents.defaults.models["apivy/gemini-3-pro-image-preview"] = {} |
      .agents.defaults.sandbox.mode = "off" |
      .agents.defaults.mediaMaxMb = 200 |
      .agents.defaults.bootstrapMaxChars = 50000 |

@@ -3,7 +3,35 @@ set -e
 
 REGISTRY="ghcr.io/jamesxie2025"
 IMAGE_NAME="jimi-pro"
-VERSION="${1:-2026.10.1}"
+
+# 优先级策略：命令行指定 $1 > win/.env 中的 IMAGE_TAG > 兜底默认值
+CLI_VERSION="$1"
+ENV_VERSION=""
+if [ -f .env ]; then
+    ENV_VERSION=$(grep -E '^[[:space:]]*(IMAGE_TAG|OPENCLAW_VER)=' .env | tail -n 1 | cut -d '=' -f2- | tr -d '\r"' | tr -d "'" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+fi
+
+VERSION="${CLI_VERSION:-${ENV_VERSION:-2026.10.5}}"
+
+# 跨平台 sed 替换辅助函数
+safe_sed_replace() {
+    local pattern="$1"
+    local file="$2"
+    if [ -f "$file" ]; then
+        if sed --version 2>/dev/null | grep -q GNU; then
+            sed -i -E "$pattern" "$file" 2>/dev/null || true
+        else
+            sed -i '' -E "$pattern" "$file" 2>/dev/null || true
+        fi
+    fi
+}
+
+safe_sed_replace "s/^ARG OPENCLAW_VER=.*/ARG OPENCLAW_VER=${VERSION}/" Dockerfile
+safe_sed_replace "s/^ARG OPENCLAW_VER=.*/ARG OPENCLAW_VER=${VERSION}/" Dockerfile.base
+
+if [ -n "$CLI_VERSION" ] && [ -f .env ]; then
+    safe_sed_replace "s/^[[:space:]]*IMAGE_TAG=.*/IMAGE_TAG=${VERSION}/" .env
+fi
 
 AMD64_IMAGE="${REGISTRY}/${IMAGE_NAME}:${VERSION}-amd64"
 BASE_AMD64_IMAGE="${REGISTRY}/${IMAGE_NAME}:base-env-amd64"
