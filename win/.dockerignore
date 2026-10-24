@@ -1,0 +1,10 @@
+# 忽略巨大目录，防止误触发全量构建上下文扫描
+.git/
+.openclaw/
+Materials/
+data/
+.DS_Store
+**/.DS_Store
+__pycache__/
+**/__pycache__/
+*.log

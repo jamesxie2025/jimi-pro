@@ -3,8 +3,9 @@
 # 针对 16G 内存、纯 CPU (无独立显卡) 环境深度调优
 # 支持本地国内镜像加速 (USE_CN_MIRRORS=1) 与 GitHub Actions 海外直连高速构建 (USE_CN_MIRRORS=0)
 # ==========================================
-ARG OPENCLAW_VER=2026.10.5
-FROM ghcr.io/openclaw/openclaw:${OPENCLAW_VER}
+ARG OPENCLAW_VER=2026.10.6
+ARG UPSTREAM_REGISTRY=ghcr.io
+FROM ${UPSTREAM_REGISTRY}/openclaw/openclaw:${OPENCLAW_VER}
 
 USER root
 ARG USE_CN_MIRRORS=1

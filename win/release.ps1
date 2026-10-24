@@ -58,22 +58,15 @@ if (!(Get-Command docker -ErrorAction SilentlyContinue)) {
     Exit 1
 }
 
-# 自动探测 Windows 宿主机代理端口 (Clash/Stash 默认 7890，v2ray 默认 10808/10809)
-$PROXY_PORT = "7890"
-if ($env:PROXY_PORT) {
-    $PROXY_PORT = $env:PROXY_PORT
-} else {
-    $ports = @(7890, 10808, 10809, 7897)
-    foreach ($p in $ports) {
-        $test = Test-NetConnection -ComputerName 127.0.0.1 -Port $p -WarningAction SilentlyContinue
-        if ($test.TcpTestSucceeded) {
-            $PROXY_PORT = "$p"
-            break
-        }
+# 自动探测 GHCR 国内高速镜像源 (优先走南大镜像站 ghcr.nju.edu.cn 免代理直连)
+$UPSTREAM_REGISTRY = "ghcr.io"
+try {
+    $resp = Invoke-WebRequest -Uri "https://ghcr.nju.edu.cn/v2/openclaw/openclaw/manifests/$VERSION" -Method Head -TimeoutSec 4 -UseBasicParsing -ErrorAction Stop
+    if ($resp.StatusCode -eq 200) {
+        $UPSTREAM_REGISTRY = "ghcr.nju.edu.cn"
     }
-}
+} catch {}
 
-$PROXY_URL = "http://host.docker.internal:${PROXY_PORT}"
 $TARGET_PLATFORM = "linux/amd64"
 
 Write-Host "============================================================" -ForegroundColor Cyan
@@ -81,7 +74,7 @@ Write-Host "   吉米·智驱 (Jimi Agent Pro) Windows 原生镜像构建助手"
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "   镜像版本: $VERSION" -ForegroundColor Yellow
 Write-Host "   目标架构: $TARGET_PLATFORM (x86_64 原生硬件编译)" -ForegroundColor Yellow
-Write-Host "   宿主机代理: $PROXY_URL" -ForegroundColor Gray
+Write-Host "   上游源站: $UPSTREAM_REGISTRY" -ForegroundColor Gray
 
 # 检测云端是否已存在 Windows 算力底座 (:base-env-amd64)
 Write-Host "🔍 正在检测 GitHub (ghcr.io) 是否已存在 Windows 算力底座 (:base-env-amd64)..." -ForegroundColor Cyan
@@ -93,8 +86,7 @@ if ($LASTEXITCODE -ne 0) {
       --provenance=false `
       --sbom=false `
       --build-arg OPENCLAW_VER=$VERSION `
-      --build-arg HTTP_PROXY=$PROXY_URL `
-      --build-arg HTTPS_PROXY=$PROXY_URL `
+      --build-arg UPSTREAM_REGISTRY=$UPSTREAM_REGISTRY `
       -f Dockerfile.base `
       -t $BASE_AMD64_IMAGE `
       -t $AMD64_IMAGE `
@@ -108,8 +100,7 @@ if ($LASTEXITCODE -ne 0) {
       --provenance=false `
       --sbom=false `
       --build-arg OPENCLAW_VER=$VERSION `
-      --build-arg HTTP_PROXY=$PROXY_URL `
-      --build-arg HTTPS_PROXY=$PROXY_URL `
+      --build-arg UPSTREAM_REGISTRY=$UPSTREAM_REGISTRY `
       -f Dockerfile `
       -t $AMD64_IMAGE `
       -t $FULL_IMAGE_NAME `
@@ -118,14 +109,13 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "❌ 镜像构建失败，请检查 Docker Desktop 日志或本地网络代理状态。"
+    Write-Error "❌ 镜像构建失败，请检查 Docker Desktop 日志或本地网络状态。"
     Exit 1
 }
 
-# 自动清理构建缓存与 Builds 历史
-Write-Host "🧹 正在自动清理临时构建缓存与 Builds 记录..." -ForegroundColor Gray
-docker rmi "ghcr.io/openclaw/openclaw:${VERSION}" >$null 2>&1
-docker buildx prune --all -f >$null 2>&1
+# 自动清理临时标签与 Builds 历史（保留 buildkit 缓存）
+Write-Host "🧹 正在自动清理临时标签与 Builds 记录..." -ForegroundColor Gray
+docker rmi "${UPSTREAM_REGISTRY}/openclaw/openclaw:${VERSION}" "ghcr.io/openclaw/openclaw:${VERSION}" >$null 2>&1
 docker buildx history rm --all >$null 2>&1
 
 Write-Host ""

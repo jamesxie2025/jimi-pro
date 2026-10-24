@@ -26,7 +26,6 @@
 2. 首次运行时会自动从 `.env.example` 生成 `.env` 配置文件。用记事本打开 `.env`：
    * 填写 `DEEPSEEK_API_KEY`（必填）
    * 填写 `EMBEDDING_API_KEY`（硅基流动向量检索 Key，推荐）
-   * 填写 `LICENSE_KEY`（试用期保持 `TRIAL`，正式版填入授权码或将授权文件放入 `.openclaw\` 目录）
    * 根据电脑物理内存（8G / 16G / 32G）核对 `MEM_LIMIT` 与 `NODE_MEM_LIMIT`
 3. 保存 `.env` 后，再次双击运行 **`run.bat`**。
 4. 脚本会自动从 `ghcr.io/jamesxie2025/jimi-pro:2026.10.1` 拉取镜像、启动容器并等待网关就绪。

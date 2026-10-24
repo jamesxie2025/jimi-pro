@@ -1,5 +1,5 @@
 #!/bin/bash
-# 吉米·智驱 商业授权系统 - 2026 旗舰最终版 (极致闭环版)
+# 吉米·智驱 (Jimi Agent) - 2026 旗舰开源版 (极致闭环版)
 
 # 0. 动态自适应与底层安全防御：智能合成 Node 运行时参数与 Windows 挂载文件系统补丁
 NODE_MEM_LIMIT="${NODE_MEM_LIMIT:-6144}"
@@ -151,9 +151,6 @@ export OPENCLAW_FS_SAFE_NATIVE_MODE=auto
 
 TARGET_DIR="/root/.openclaw"
 rm -f "$TARGET_DIR/exec-approvals.json"
-ID_FILE="$TARGET_DIR/.machine_id"
-LOCK_FILE="$TARGET_DIR/.sys_runtime_cache.bin"
-SALT="JIMI-PRO-ULTRA-MAX-2026-SECRET"
 CONFIG_FILE="$TARGET_DIR/openclaw.json"
 
 # 1. 物理开辟土壤（仅在目录新建时设权限，避免每次重启全量 chmod 拖慢 Windows 挂载）
@@ -265,6 +262,7 @@ if [ ! -s "$CONFIG_FILE" ] || ! grep -q '"models"' "$CONFIG_FILE" 2>/dev/null; t
         "baseUrl": "REPLACE_DEEPSEEK_BASE_URL", "api": "openai-completions",
         "apiKey": "REPLACE_DEEPSEEK_KEY",
         "models": [
+          { "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash", "input": ["text", "image"] },
           { "id": "deepseek-flash", "name": "DeepSeek Flash", "input": ["text", "image"] },
           { "id": "deepseek-v4-pro", "name": "DeepSeek V4 Pro" }
         ],
@@ -378,7 +376,7 @@ fi
 
 # 🌟 核心修复：用 jq 精准注入 Key（每次启动都根据 .env 同步，防掉线、防失效）
 # 动态解析 PRIMARY_MODEL, FALLBACK_MODEL_1, FALLBACK_MODEL_2，将其加入支持的 models 列表中
-DEEPSEEK_MODELS=("deepseek-flash" "deepseek-v4-pro")
+DEEPSEEK_MODELS=("deepseek-v4-flash" "deepseek-flash" "deepseek-v4-pro")
 AGNES_MODELS=("agnes-2.0-flash")
 
 add_model_id() {
@@ -410,15 +408,18 @@ add_model_id() {
   fi
 }
 
-add_model_id "${PRIMARY_MODEL:-deepseek/deepseek-flash}"
-add_model_id "${FALLBACK_MODEL_1:-deepseek/deepseek-v4-pro}"
-add_model_id "${FALLBACK_MODEL_2:-agnes/agnes-2.0-flash}"
+add_model_id "${PRIMARY_MODEL:-deepseek/deepseek-v4-flash}"
+add_model_id "${FALLBACK_MODEL_1:-deepseek/deepseek-flash}"
+add_model_id "${FALLBACK_MODEL_2:-deepseek/deepseek-v4-pro}"
 
 # 构建 deepseek models 的 JSON 数组
 ds_models_json="["
 for m in "${DEEPSEEK_MODELS[@]}"; do
   name="$m"
-  if [ "$m" = "deepseek-flash" ]; then
+  if [ "$m" = "deepseek-v4-flash" ]; then
+    name="DeepSeek V4 Flash"
+    ds_models_json="${ds_models_json}{\"id\":\"$m\",\"name\":\"$name\",\"input\":[\"text\",\"image\"]},"
+  elif [ "$m" = "deepseek-flash" ]; then
     name="DeepSeek Flash"
     ds_models_json="${ds_models_json}{\"id\":\"$m\",\"name\":\"$name\",\"input\":[\"text\",\"image\"]},"
   elif [ "$m" = "deepseek-v4-pro" ]; then
@@ -450,9 +451,9 @@ jq --arg tok "${OPENCLAW_GATEWAY_TOKEN:-Jimi_Agent_2026}" \
    --arg tavily_url "${TAVILY_BASE_URL:-https://api.tavily.com}" \
    --arg brave_key "${BRAVE_API_KEY:-}" \
    --arg search_prov "${SEARCH_PROVIDER:-tavily}" \
-   --arg primary "${PRIMARY_MODEL:-deepseek/deepseek-flash}" \
-   --arg fallback1 "${FALLBACK_MODEL_1:-deepseek/deepseek-v4-pro}" \
-   --arg fallback2 "${FALLBACK_MODEL_2:-agnes/agnes-2.0-flash}" \
+   --arg primary "${PRIMARY_MODEL:-deepseek/deepseek-v4-flash}" \
+   --arg fallback1 "${FALLBACK_MODEL_1:-deepseek/deepseek-flash}" \
+   --arg fallback2 "${FALLBACK_MODEL_2:-deepseek/deepseek-v4-pro}" \
    --arg embed_prov "${EMBEDDING_PROVIDER:-openai}" \
    --arg embed_model "${EMBEDDING_MODEL:-BAAI/bge-large-zh-v1.5}" \
    --arg embed_url "${EMBEDDING_BASE_URL:-https://api.siliconflow.cn/v1}" \
@@ -536,6 +537,9 @@ jq --arg tok "${OPENCLAW_GATEWAY_TOKEN:-Jimi_Agent_2026}" \
      .agents.defaults.models[$primary] = {} |
      .agents.defaults.models[$fallback1] = {} |
      .agents.defaults.models[$fallback2] = {} |
+     (if .agents.defaults.modelPolicy.allow then
+        .agents.defaults.modelPolicy.allow = ((.agents.defaults.modelPolicy.allow + [$primary, $fallback1, $fallback2]) | unique)
+      else . end) |
       .agents.defaults.imageModel = {
         "primary": "dashscope/qwen3-vl-flash",
         "fallbacks": [
@@ -551,7 +555,11 @@ jq --arg tok "${OPENCLAW_GATEWAY_TOKEN:-Jimi_Agent_2026}" \
      .agents.defaults.sandbox.mode = "off" |
      .agents.defaults.mediaMaxMb = 200 |
      .agents.defaults.bootstrapMaxChars = 50000 |
-     (if .agents.entries.main then .agents.entries.main.bootstrapMaxChars = 50000 else . end) |
+     (if .agents.entries.main then
+        .agents.entries.main.bootstrapMaxChars = 50000 |
+        .agents.entries.main.model.primary = $primary |
+        .agents.entries.main.model.fallbacks = (([$fallback1, $fallback2] + (.agents.entries.main.model.fallbacks // [])) | unique)
+      else . end) |
      del(.plugins.bundledDiscovery) |
      del(.plugins.entries["open-prose"]) |
       .plugins.allow = ([((.plugins.allow // [])[] | select(. != "open-prose"))] + ["browser", "document-extract", "qwen"] | unique) |
@@ -569,59 +577,11 @@ echo "✅ 基因播种完成，配置文件大小: $(wc -c < "$CONFIG_FILE") byt
 echo "   Primary Model: $PRIMARY_MODEL"
 echo "   Search Provider: $SEARCH_PROVIDER"
 
-# 3. 持久化 ID (商业锁核心)
-# 使用挂载卷内的持久化 UUID，而非不稳定的网卡 MAC 地址
-if [ -f "$ID_FILE" ]; then
-    MACHINE_ID=$(cat "$ID_FILE" | tr -d '\r\n ')
-else
-    # 优先读取 boot_id 的前12位（不依赖网卡，在任何容器运行时均稳定）
-    RAW_ID=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null | tr -d '-' | head -c 12)
-    # 备用：从 eth0 读取（兼容旧行为）
-    [ -z "$RAW_ID" ] && RAW_ID=$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')
-    # 最终兜底：随机生成
-    [ -z "$RAW_ID" ] && RAW_ID=$(cat /dev/urandom | tr -dc 'a-z0-9' | head -c 12)
-    echo "$RAW_ID" > "$ID_FILE"
-    MACHINE_ID=$RAW_ID
-fi
-
+# 3. 开源启动横幅 (已全面移除商业授权锁，100% 开源无限制运行)
 echo "===================================================="
-echo "🤖 吉米·智驱 (Jimi Agent) 启动中..."
-echo "💻 设备识别码: $MACHINE_ID"
+echo "🤖 吉米·智驱 (Jimi Agent) 开源旗舰版 启动中..."
+echo "🔓 授权状态: Open Source Edition (永久免费无限制)"
 echo "===================================================="
-
-# 4. 商业授权检查 (基石代码)
-NOW_TS=$(date +%s)
-IS_AUTHORIZED=false
-if [ "$LICENSE_KEY" != "TRIAL" ] && [[ "$LICENSE_KEY" == *"-"* ]]; then
-    INPUT_DATE=$(echo "$LICENSE_KEY" | cut -d'-' -f1)
-    INPUT_SIG=$(echo "$LICENSE_KEY" | cut -d'-' -f2)
-    EXPECTED_SIG=$(echo -n "${INPUT_DATE}${MACHINE_ID}${SALT}" | md5sum | cut -c1-8)
-    if [ "$INPUT_SIG" == "$EXPECTED_SIG" ]; then
-        FORMAT_DATE="${INPUT_DATE:0:4}-${INPUT_DATE:4:2}-${INPUT_DATE:6:2}"
-        EXP_TS=$(date -d "$FORMAT_DATE 23:59:59" +%s 2>/dev/null || date -j -f "%Y-%m-%d %H:%M:%S" "$FORMAT_DATE 23:59:59" +%s 2>/dev/null)
-        if [ -n "$EXP_TS" ] && [ "$NOW_TS" -le "$EXP_TS" ]; then
-            echo "✨ 商业正式版授权认证成功！"
-            IS_AUTHORIZED=true
-        fi
-    fi
-else
-    if [ ! -f "$LOCK_FILE" ]; then
-        SIG=$(echo -n "${NOW_TS}${SALT}" | md5sum | cut -c1-8)
-        echo "${NOW_TS}:${SIG}" > "$LOCK_FILE"
-        echo "🎁 14 天商业试用许可已激活。"
-    fi
-    SEAL_CONTENT=$(cat "$LOCK_FILE" | tr -d '\r\n ')
-    SAVED_TS=$(echo $SEAL_CONTENT | cut -d':' -f1); SAVED_SIG=$(echo $SEAL_CONTENT | cut -d':' -f2)
-    if [ "$(echo -n "${SAVED_TS}${SALT}" | md5sum | cut -c1-8)" == "$SAVED_SIG" ]; then
-        E_TS=$(( SAVED_TS + 2592000 ))
-        if [ "$NOW_TS" -le "$E_TS" ] && [ "$NOW_TS" -ge "$SAVED_TS" ]; then
-            DIFF=$(( E_TS - NOW_TS ))
-            echo "⏳ 试用期剩余：$(( DIFF / 3600 )) 小时"
-            IS_AUTHORIZED=true
-        fi
-    fi
-fi
-if [ "$IS_AUTHORIZED" = false ]; then echo "🚫 许可无效，联系微信: 186-8898-5985"; exit 1; fi
 
 ## 4.4 🧹 清理异常关机残留的 SQLite 锁文件 (防止 Windows/NTFS 挂载卷死锁)
 find "$TARGET_DIR" -type f \( -name "*.sqlite-wal" -o -name "*.sqlite-shm" -o -name "*.sqlite-journal" \) -delete 2>/dev/null || true

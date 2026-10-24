@@ -13,9 +13,9 @@ on:
   workflow_dispatch:
     inputs:
       openclaw_ver:
-        description: 'OpenClaw Version (e.g. 2026.10.5)'
+        description: 'OpenClaw Version (e.g. 2026.10.6)'
         required: false
-        default: '2026.10.5'
+        default: '2026.10.6'
       force_base_rebuild:
         description: 'Force full rebuild of base-env-amd64 from Dockerfile.base'
         required: false
@@ -55,7 +55,7 @@ jobs:
           VER="${{ github.event.inputs.openclaw_ver }}"
           if [ -z "$VER" ]; then
             VER=$(grep -E '^ARG OPENCLAW_VER=' win/Dockerfile | head -n1 | cut -d'=' -f2 | tr -d '[:space:]')
-            VER="${VER:-2026.10.5}"
+            VER="${VER:-2026.10.6}"
           fi
           echo "version=${VER}" >> "$GITHUB_OUTPUT"
 

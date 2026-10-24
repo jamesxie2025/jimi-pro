@@ -11,7 +11,7 @@ if [ -f .env ]; then
     ENV_VERSION=$(grep -E '^[[:space:]]*(IMAGE_TAG|OPENCLAW_VER)=' .env | tail -n 1 | cut -d '=' -f2- | tr -d '\r"' | tr -d "'" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
 fi
 
-VERSION="${CLI_VERSION:-${ENV_VERSION:-2026.10.5}}"
+VERSION="${CLI_VERSION:-${ENV_VERSION:-2026.10.6}}"
 
 # 跨平台 sed 替换辅助函数
 safe_sed_replace() {
@@ -38,8 +38,10 @@ BASE_AMD64_IMAGE="${REGISTRY}/${IMAGE_NAME}:base-env-amd64"
 FULL_IMAGE_NAME="${REGISTRY}/${IMAGE_NAME}:${VERSION}"
 LATEST_IMAGE_NAME="${REGISTRY}/${IMAGE_NAME}:latest"
 
-PROXY_PORT="${PROXY_PORT:-7890}"
-PROXY_URL="http://host.docker.internal:${PROXY_PORT}"
+UPSTREAM_REGISTRY="ghcr.nju.edu.cn"
+if ! curl -sI --noproxy "*" --connect-timeout 3 -m 5 "https://ghcr.nju.edu.cn/v2/openclaw/openclaw/manifests/${VERSION}" | grep -qE "HTTP/[0-9.]+ 200"; then
+    UPSTREAM_REGISTRY="ghcr.io"
+fi
 TARGET_PLATFORM="linux/amd64"
 
 echo "============================================================"
@@ -48,7 +50,7 @@ echo "============================================================"
 echo "🚀 启动 Windows (AMD64) 原生构建..."
 echo "   版本: ${VERSION}"
 echo "   目标架构: ${TARGET_PLATFORM}"
-echo "   内部代理: ${PROXY_URL}"
+echo "   上游源站: ${UPSTREAM_REGISTRY}"
 echo "============================================================"
 
 if ! docker buildx imagetools inspect "${BASE_AMD64_IMAGE}" >/dev/null 2>&1; then
@@ -58,8 +60,7 @@ if ! docker buildx imagetools inspect "${BASE_AMD64_IMAGE}" >/dev/null 2>&1; the
       --provenance=false \
       --sbom=false \
       --build-arg OPENCLAW_VER=${VERSION} \
-      --build-arg HTTP_PROXY=${PROXY_URL} \
-      --build-arg HTTPS_PROXY=${PROXY_URL} \
+      --build-arg UPSTREAM_REGISTRY=${UPSTREAM_REGISTRY} \
       -f Dockerfile.base \
       -t ${BASE_AMD64_IMAGE} \
       -t ${AMD64_IMAGE} \
@@ -73,8 +74,7 @@ else
       --provenance=false \
       --sbom=false \
       --build-arg OPENCLAW_VER=${VERSION} \
-      --build-arg HTTP_PROXY=${PROXY_URL} \
-      --build-arg HTTPS_PROXY=${PROXY_URL} \
+      --build-arg UPSTREAM_REGISTRY=${UPSTREAM_REGISTRY} \
       -f Dockerfile \
       -t ${AMD64_IMAGE} \
       -t ${FULL_IMAGE_NAME} \
@@ -82,9 +82,8 @@ else
       --push .
 fi
 
-echo "🧹 正在自动清理临时构建缓存与 Builds 记录..."
-docker rmi "ghcr.io/openclaw/openclaw:${VERSION}" "${AMD64_IMAGE}" 2>/dev/null || true
-docker buildx prune --all -f >/dev/null 2>&1 || true
+echo "🧹 正在自动清理临时标签与 Builds 记录..."
+docker rmi "${UPSTREAM_REGISTRY}/openclaw/openclaw:${VERSION}" "ghcr.io/openclaw/openclaw:${VERSION}" "${AMD64_IMAGE}" 2>/dev/null || true
 docker buildx history rm --all >/dev/null 2>&1 || true
 
 echo ""

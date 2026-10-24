@@ -1,7 +1,4 @@
-# 严禁上传商业授权算号器与私人脚本
-license.sh
-win/license.sh
-*license*.sh
+# 忽略本地私人辅助脚本
 sync.sh
 make_key.sh
 
@@ -29,6 +26,7 @@ __pycache__/
 **/__pycache__/
 
 # 忽略根目录下的本机 macOS 专用构建与运行文件（GitHub 仓库仅用于 Windows 版）
+/.dockerignore
 /Dockerfile
 /Dockerfile.base
 /Dockerfile.sandbox

@@ -35,7 +35,7 @@ services:
       - "18789:18789"
 
     volumes:
-      # .openclaw：持久化配置、商业授权锁、记忆、工作区（重要：不要删除此目录）
+      # .openclaw：持久化配置、记忆、工作区（重要：不要删除此目录）
       - ./.openclaw:/root/.openclaw
       # Docker Socket 挂载，赋予智能体调度宿主机其他 Docker 容器的权限
       - //var/run/docker.sock:/var/run/docker.sock

@@ -1,6 +1,6 @@
 # 吉米·智驱 (Jimi Agent Pro) — Windows 版部署与构建指南
 
-本仓库为 **吉米·智驱 (Jimi Agent Pro - OpenClaw `2026.10.1` 商业增强版)** 的 **Windows (`linux/amd64`) 官方镜像构建与部署仓库**，专为 Windows 10/11 PC（WSL2 + Docker Desktop）打造。
+本仓库为 **吉米·智驱 (Jimi Agent Pro - OpenClaw `2026.10.6` 开源旗舰版)** 的 **Windows (`linux/amd64`) 官方镜像构建与部署仓库**，专为 Windows 10/11 PC（WSL2 + Docker Desktop）打造。
 
 ---
 
@@ -24,7 +24,7 @@ Windows (`linux/amd64`) 镜像由 GitHub Actions 自动编译并发布至 GitHub
 * **[`win/.env.example`](./win/.env.example)**：Windows 环境变量与硬件内存配额配置模板。
 * **[`win/Dockerfile.base`](./win/Dockerfile.base)**：Windows 全量算力底座构建文件（内置 Debian 系统库、Python 科学计算/AI 依赖、CPU 版 PyTorch、LibreOffice、Playwright Chromium、预置插件种子等）。
 * **[`win/Dockerfile`](./win/Dockerfile)**：Windows 极速增量热升级构建文件（复用 `:base-env-amd64` 底座，秒级完成 OpenClaw 核心与技能包升级）。
-* **[`win/entrypoint.sh`](./win/entrypoint.sh)**：Windows 容器启动入口（内置商业授权校验、`openclaw.json` 基因播种、SQLite 路径自适应修复及 Windows 文件系统兼容补丁）。
+* **[`win/entrypoint.sh`](./win/entrypoint.sh)**：Windows 容器启动入口（内置 `openclaw.json` 基因播种、SQLite 路径自适应修复及 Windows 文件系统兼容补丁）。
 * **[`win/release.ps1`](./win/release.ps1)**：Windows 本地构建与发布辅助脚本。
 * **[`.github/workflows/build-win-image.yml`](./.github/workflows/build-win-image.yml)**：GitHub Actions 云端自动化构建流水线，自动编译 `win/` 目录并发布至 `ghcr.io/jamesxie2025/jimi-pro`。
 
@@ -41,7 +41,6 @@ Windows (`linux/amd64`) 镜像由 GitHub Actions 自动编译并发布至 GitHub
 2. 首次运行时，脚本会自动从 `.env.example` 生成 `.env` 配置文件。请用记事本打开 `win\.env` 填写必要的参数：
    * `DEEPSEEK_API_KEY`（必填）
    * `EMBEDDING_API_KEY`（硅基流动向量检索 Key，推荐）
-   * `LICENSE_KEY`（试用期填 `TRIAL`，正式版填入授权码或将授权文件放入 `.openclaw\` 目录）
    * 根据电脑物理内存（8G / 16G / 32G）核对 `MEM_LIMIT` 与 `NODE_MEM_LIMIT`
 3. 再次双击 **`run.bat`**，脚本将自动从 GitHub (`ghcr.io/jamesxie2025/jimi-pro`) 拉取最新镜像并启动容器。
 4. 启动完成后，在浏览器访问：

@@ -10,9 +10,10 @@
 #    （注：首次构建或需修改底层 Python/Debian 依赖库时，release.ps1 会自动调用 Dockerfile.base）
 # ==============================================================================
 
-ARG OPENCLAW_VER=2026.10.5
+ARG OPENCLAW_VER=2026.10.6
+ARG UPSTREAM_REGISTRY=ghcr.io
 ARG BASE_IMAGE=ghcr.io/jamesxie2025/jimi-pro:base-env-amd64
-FROM ghcr.io/openclaw/openclaw:${OPENCLAW_VER} AS openclaw-upstream
+FROM ${UPSTREAM_REGISTRY}/openclaw/openclaw:${OPENCLAW_VER} AS openclaw-upstream
 
 FROM ${BASE_IMAGE}
 
@@ -25,7 +26,10 @@ ENV FS_SAFE_NATIVE_MODE=auto \
 # 1. 原地保留底座中已预装好的插件种子包 (/app/plugins-seed)，仅清理旧版核心文件
 RUN find /app -mindepth 1 -maxdepth 1 ! -name 'plugins-seed' -exec rm -rf {} +
 
-# 2. 从官方新版镜像中精准注入最新版本的 OpenClaw 核心引擎 (/app)
+# 2. 从官方新版镜像中精准注入最新版本的 Node.js 运行时 (Node >=24.22.1) 与 OpenClaw 核心引擎 (/app)
+COPY --from=openclaw-upstream /usr/local/bin/node /usr/local/bin/node
+COPY --from=openclaw-upstream /usr/local/include/node/ /usr/local/include/node/
+COPY --from=openclaw-upstream /usr/local/lib/node_modules/ /usr/local/lib/node_modules/
 COPY --from=openclaw-upstream /app/ /app/
 
 # 3. 对齐 openclaw 全局命令软链接与目录权限
